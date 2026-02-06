@@ -2,8 +2,7 @@ name: Create Release
 
 on:
   push:
-    tags: [ '*.*.*.*' ]
-    branches: [ master ]
+    tags: [ '*.*.*.*.*' ]
 
 env:
   SPARK_LOCAL_IP: 127.0.0.1
@@ -11,78 +10,12 @@ env:
 jobs:
   build-and-release:
     name: Build and Release
-    if: github.repository_owner == 'memiiso'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
       packages: write
-      actions: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: 21
-          cache: 'maven'
-
-      - name: Determine Release Name
-        id: set_release_version
-        run: |
-          if [[ "${{ github.ref_name }}" == "master" ]]; then
-            echo "RELEASE_VERSION=latest" >> $GITHUB_ENV
-          else
-            echo "RELEASE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
-          fi
-        shell: bash # Explicitly set shell to bash
-
-      - name: Build Project
-        run: mvn -B --no-transfer-progress clean package -Passembly --file pom.xml -Drevision=${{ env.RELEASE_VERSION }}
-
-      - name: Delete Existing Release (if any)
-        run: gh release delete ${{ env.RELEASE_VERSION }} --cleanup-tag --yes
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: Release ${{ env.RELEASE_VERSION }}
-          tag_name: ${{ env.RELEASE_VERSION }}
-          body: Release ${{ env.RELEASE_VERSION }}
-          draft: false
-          prerelease: true
-      - name: Delete Maven Package from Github
-        uses: paulushcgcj/delete-github-package@1.0.0
-        with:
-          type: maven
-          name: io.debezium.debezium-server-iceberg
-          version: ${{ env.RELEASE_VERSION }}
-        continue-on-error: true
-      - name: Delete Maven Package Dist from Github
-        uses: paulushcgcj/delete-github-package@1.0.0
-        with:
-          type: maven
-          name: io.debezium.debezium-server-iceberg-dist
-          version: ${{ env.RELEASE_VERSION }}
-        continue-on-error: true
-      - name: Delete Maven Package Sink from Github
-        uses: paulushcgcj/delete-github-package@1.0.0
-        with:
-          type: maven
-          name: io.debezium.debezium-server-iceberg-sink
-          version: ${{ env.RELEASE_VERSION }}
-        continue-on-error: true
-      - name: Publish ${{ env.RELEASE_VERSION }} to GitHub Packages
-        run: mvn --batch-mode clean package -Passembly deploy --file pom.xml -Drevision=${{ env.RELEASE_VERSION }} -Dmaven.test.skip=true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -98,11 +31,5 @@ jobs:
           file: ./Dockerfile
           push: true
           build-args: |
-            RELEASE_VERSION=${{ env.RELEASE_VERSION }}
-          tags: ghcr.io/${{ github.repository_owner }}/debezium-server-iceberg:${{ env.RELEASE_VERSION }}
-
-      - name: Delete Untagged Docker Images
-        uses: dylanratcliffe/delete-untagged-containers@main
-        with:
-          package_name: debezium-server-iceberg
-          token: ${{ secrets.GITHUB_TOKEN }}
+            RELEASE_VERSION=${{ github.ref_name }}
+          tags: ghcr.io/${{ github.repository_owner }}/debezium-server-iceberg:${{ github.ref_name }}
